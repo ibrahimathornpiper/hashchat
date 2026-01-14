@@ -34,7 +34,7 @@ jobs:
           zip -r burner_chat.ipa Payload
           
       - name: Upload IPA Artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: burner-chat-ipa
           path: burner_chat.ipa
