@@ -1,0 +1,32 @@
+name: Build AltStore IPA
+on:
+  push:
+    branches: [ main ]
+jobs:
+  build-ios:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+          
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Build IPA (Force No Signing)
+        # ВОТ ЗДЕСЬ МЫ ВНЕДРИЛИ ИСПРАВЛЕНИЕ:
+        run: flutter build ios --release --no-codesign -- --xcargs CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY=""
+
+      - name: Package for AltStore
+        run: |
+          mkdir Payload
+          mv build/ios/iphoneos/Runner.app Payload/
+          zip -r burner_chat.ipa Payload
+
+      - name: Upload IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: burner_chat.ipa
+          path: burner_chat.ipa
