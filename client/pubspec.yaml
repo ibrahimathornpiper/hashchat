@@ -1,0 +1,27 @@
+name: hashchat_client
+description: A Burner Chat Client with Liquid Glass Design.
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.6
+  # UI
+  glassmorphic: ^3.0.0
+  google_fonts: ^6.1.0
+  # Crypto
+  web3dart: ^2.7.0
+  encrypt: ^5.0.3
+  http: ^1.1.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.0
+
+flutter:
+  uses-material-design: true

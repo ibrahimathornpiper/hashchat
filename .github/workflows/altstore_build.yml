@@ -1,0 +1,40 @@
+name: Build iOS IPA (No-Codesign)
+
+on:
+  push:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+jobs:
+  build_ios_unsigned:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+          
+      - name: Install Dependencies
+        working-directory: ./client
+        run: flutter pub get
+
+      - name: Build iOS (No Codesign)
+        working-directory: ./client
+        run: |
+          flutter build ios --release --no-codesign
+          
+      - name: Package IPA (Payload Method)
+        run: |
+          mkdir Payload
+          # Move the built .app into Payload
+          mv client/build/ios/iphoneos/Runner.app Payload/
+          # Zip it up
+          zip -r burner_chat.ipa Payload
+          
+      - name: Upload IPA Artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: burner-chat-ipa
+          path: burner_chat.ipa

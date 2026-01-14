@@ -1,0 +1,40 @@
+{
+  "_format": "hh-sol-cache-2",
+  "files": {
+    "/home/ibrahimm/hashchat/smart_contract/contracts/BurnerChat.sol": {
+      "lastModificationDate": 1768330849554,
+      "contentHash": "04e85aa7922e3f3c38424bc1d1465de6",
+      "sourceName": "contracts/BurnerChat.sol",
+      "solcConfig": {
+        "version": "0.8.19",
+        "settings": {
+          "optimizer": {
+            "enabled": false,
+            "runs": 200
+          },
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          }
+        }
+      },
+      "imports": [],
+      "versionPragmas": [
+        "^0.8.19"
+      ],
+      "artifacts": [
+        "BurnerChat"
+      ]
+    }
+  }
+}
