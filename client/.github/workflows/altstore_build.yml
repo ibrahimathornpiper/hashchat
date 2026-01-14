@@ -15,18 +15,16 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
-      - name: Nuke Signing Requirements (Dirty Hack)
+      - name: Disable Signing Requirements
         run: |
-          cd ios/Runner.xcodeproj
-          # 1. Принудительно ставим Manual (чтобы Xcode не искал профили сам)
-          sed -i '' 's/ProvisioningStyle = Automatic;/ProvisioningStyle = Manual;/g' project.pbxproj
-          # 2. Удаляем строку DevelopmentTeam (делаем ее пустой)
-          sed -i '' 's/DevelopmentTeam = [^;]*;/DevelopmentTeam = "";/g' project.pbxproj
-          # 3. Убираем требование подписи
-          sed -i '' 's/CODE_SIGNING_REQUIRED = "YES";/CODE_SIGNING_REQUIRED = "NO";/g' project.pbxproj
-          sed -i '' 's/CODE_SIGNING_ALLOWED = "YES";/CODE_SIGNING_ALLOWED = "NO";/g' project.pbxproj
-          # 4. Стираем идентификатор подписи
-          sed -i '' 's/CODE_SIGN_IDENTITY = "iPhone Developer";/CODE_SIGN_IDENTITY = "";/g' project.pbxproj
+          # 1. Inject ProvisioningStyle = Manual into the Runner target attributes
+          # Target ID 97C146ED1CF9000F007C117D is standard for Flutter Runner
+          sed -i '' 's/97C146ED1CF9000F007C117D = {/97C146ED1CF9000F007C117D = { ProvisioningStyle = Manual;/' ios/Runner.xcodeproj/project.pbxproj
+          
+          # 2. Add signing configuration to Release.xcconfig to override project settings
+          echo "CODE_SIGNING_ALLOWED = NO" >> ios/Flutter/Release.xcconfig
+          echo "CODE_SIGNING_REQUIRED = NO" >> ios/Flutter/Release.xcconfig
+          echo "CODE_SIGN_IDENTITY = " >> ios/Flutter/Release.xcconfig
 
       - name: Build IPA (No Codesign)
         run: flutter build ios --release --no-codesign
