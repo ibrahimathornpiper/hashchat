@@ -23,7 +23,7 @@ jobs:
       - name: Build iOS (No Codesign)
         working-directory: ./client
         run: |
-          flutter build ios --release --no-codesign
+          flutter build ios --release --no-codesign --build-number=1 --build-name=1.0.0
           
       - name: Package IPA (Payload Method)
         run: |
