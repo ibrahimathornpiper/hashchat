@@ -1,14 +1,18 @@
-import 'dart:ui';
-import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
+import 'package:provider/provider.dart';
 import 'package:glassmorphism/glassmorphism.dart';
-import 'package:web3dart/web3dart.dart'; // For Wallet
-import 'package:encrypt/encrypt.dart' as encrypt; // For AES
 import 'package:google_fonts/google_fonts.dart';
+import 'package:intl/intl.dart';
+import 'chat_service.dart';
 
 void main() {
-  runApp(const HashChatApp());
+  runApp(
+    ChangeNotifierProvider(
+      create: (_) => ChatService(),
+      child: const HashChatApp(),
+    ),
+  );
 }
 
 class HashChatApp extends StatelessWidget {
@@ -22,227 +26,345 @@ class HashChatApp extends StatelessWidget {
       theme: ThemeData(
         brightness: Brightness.dark,
         scaffoldBackgroundColor: Colors.black,
-        primarySwatch: Colors.blue,
         textTheme: GoogleFonts.outfitTextTheme(ThemeData.dark().textTheme),
       ),
-      home: const LiquidHome(),
+      home: const RootScreen(),
     );
   }
 }
 
-class LiquidHome extends StatefulWidget {
-  const LiquidHome({super.key});
+class RootScreen extends StatelessWidget {
+  const RootScreen({super.key});
 
   @override
-  State<LiquidHome> createState() => _LiquidHomeState();
+  Widget build(BuildContext context) {
+    final chat = context.watch<ChatService>();
+    
+    if (chat.myAddress == null) {
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
+
+    if (!chat.isRegistered) {
+      return const RegistrationScreen();
+    }
+
+    return const ChatListScreen();
+  }
 }
 
-class _LiquidHomeState extends State<LiquidHome> {
-  String _walletAddress = "Generating...";
-  String _privateKey = "";
-  final TextEditingController _msgController = TextEditingController();
-  final List<String> _messages = [];
+class RegistrationScreen extends StatefulWidget {
+  const RegistrationScreen({super.key});
 
   @override
-  void initState() {
-    super.initState();
-    _generateBurnerWallet();
-  }
+  State<RegistrationScreen> createState() => _RegistrationScreenState();
+}
 
-  // --- CRYPTO LOGIC ---
-
-  Future<void> _generateBurnerWallet() async {
-    // 1. Generate random Eth private key
-    var rng = Random.secure();
-    Credentials cred = EthPrivateKey.createRandom(rng);
-    EthereumAddress address = await cred.extractAddress();
-    
-    setState(() {
-      _privateKey = (cred as EthPrivateKey).privateKeyInt.toRadixString(16);
-      _walletAddress = address.hex;
-    });
-  }
-
-  String _encryptMessage(String plainText) {
-    // Simple AES Encryption (In prod, derive key from secure storage or diffie-hellman)
-    final key = encrypt.Key.fromUtf8('my32lengthsupersecretnooneknows1'); 
-    final iv = encrypt.IV.fromLength(16);
-    final encrypter = encrypt.Encrypter(encrypt.AES(key));
-    
-    final encrypted = encrypter.encrypt(plainText, iv: iv);
-    return encrypted.base64;
-  }
-
-  void _sendMessage() {
-    if (_msgController.text.isEmpty) return;
-    
-    final encrypted = _encryptMessage(_msgController.text);
-    // In a real app, you'd broadcast 'encrypted' to the mesh/server here.
-    
-    setState(() {
-      _messages.insert(0, "Me: ${_msgController.text} \n(Enc: ${encrypted.substring(0, 10)}...)");
-      _msgController.clear();
-    });
-  }
-
-  // --- UI LOGIC (Liquid Glass) ---
+class _RegistrationScreenState extends State<RegistrationScreen> {
+  final TextEditingController _nameController = TextEditingController();
+  bool _loading = false;
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       body: Stack(
         children: [
-          // 1. Deep Mesh Gradient Background
-          Container(
-            decoration: const BoxDecoration(
-              gradient: LinearGradient(
-                colors: [Color(0xFF0F2027), Color(0xFF203A43), Color(0xFF2C5364)],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
+          _buildBackground(),
+          Center(
+            child: GlassmorphicContainer(
+              width: 350,
+              height: 400,
+              borderRadius: 30,
+              blur: 20,
+              alignment: Alignment.center,
+              border: 2,
+              linearGradient: LinearGradient(
+                colors: [Colors.white.withOpacity(0.1), Colors.white.withOpacity(0.05)]
+              ),
+              borderGradient: LinearGradient(
+                colors: [Colors.cyanAccent.withOpacity(0.5), Colors.purpleAccent.withOpacity(0.5)]
+              ),
+              child: Padding(
+                padding: const EdgeInsets.all(32.0),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text("Welcome to HashChat", 
+                      style: GoogleFonts.outfit(fontSize: 24, fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 10),
+                    const Text("Secure, Decentralized, Unstoppable.", 
+                      textAlign: TextAlign.center,
+                      style: TextStyle(color: Colors.white70)),
+                    const SizedBox(height: 40),
+                    CupertinoTextField(
+                      controller: _nameController,
+                      placeholder: "Enter Nickname",
+                      placeholderStyle: const TextStyle(color: Colors.white38),
+                      style: const TextStyle(color: Colors.white),
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(15),
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                    if (_loading) 
+                      const CircularProgressIndicator()
+                    else
+                      SizedBox(
+                        width: double.infinity,
+                        child: CupertinoButton(
+                          color: Colors.cyanAccent.withOpacity(0.2),
+                          onPressed: () async {
+                            setState(() => _loading = true);
+                            try {
+                              await context.read<ChatService>().register(_nameController.text);
+                            } catch (e) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(content: Text("Error: $e"))
+                              );
+                            }
+                            setState(() => _loading = false);
+                          },
+                          child: const Text("Register Identity", style: TextStyle(color: Colors.cyanAccent)),
+                        ),
+                      ),
+                  ],
+                ),
               ),
             ),
           ),
-          // Ambient Blobs
-          Positioned(
-            top: -50,
-            left: -50,
-            child: _buildBlob(Colors.purpleAccent.withOpacity(0.4)),
-          ),
-          Positioned(
-            bottom: 100,
-            right: -60,
-            child: _buildBlob(Colors.cyanAccent.withOpacity(0.4)),
-          ),
-
-          // 2. Main Content
-          SafeArea(
-            child: Column(
-              children: [
-                const SizedBox(height: 20),
-                _buildGlassHeader(),
-                const SizedBox(height: 20),
-                Expanded(child: _buildChatList()),
-                _buildInputArea(),
-              ],
-            ),
-          ),
         ],
       ),
     );
   }
 
-  Widget _buildBlob(Color color) {
+  Widget _buildBackground() {
     return Container(
-      height: 300,
-      width: 300,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        color: color,
-        boxShadow: [BoxShadow(color: color, blurRadius: 80, spreadRadius: 20)],
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          colors: [Color(0xFF0F2027), Color(0xFF203A43), Color(0xFF2C5364)],
+        )
       ),
     );
   }
+}
 
-  Widget _buildGlassHeader() {
-    return GlassmorphicContainer(
-      width: double.infinity,
-      height: 140,
-      borderRadius: 20,
-      blur: 20,
-      alignment: Alignment.center,
-      border: 2,
-      linearGradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            Colors.white.withOpacity(0.1),
-            Colors.white.withOpacity(0.05),
-          ],
-          stops: const [0.1, 1],
-      ),
-      borderGradient: LinearGradient(
-        begin: Alignment.topLeft,
-        end: Alignment.bottomRight,
-        colors: [
-          Colors.white.withOpacity(0.5),
-          Colors.white.withOpacity(0.1),
-        ],
-      ),
-      margin: const EdgeInsets.symmetric(horizontal: 16),
-      child: Padding(
-        padding: const EdgeInsets.all(16.0),
+class ChatListScreen extends StatefulWidget {
+  const ChatListScreen({super.key});
+
+  @override
+  State<ChatListScreen> createState() => _ChatListScreenState();
+}
+
+class _ChatListScreenState extends State<ChatListScreen> {
+  final TextEditingController _targetController = TextEditingController();
+  final TextEditingController _msgController = TextEditingController();
+
+  void _showNewChat() {
+    showCupertinoModalPopup(
+      context: context,
+      builder: (ctx) => Container(
+        height: 300,
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: const Color(0xFF1B2735),
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(25)),
+        ),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Text("HashChat // Identity", style: GoogleFonts.outfit(color: Colors.white70, fontSize: 12)),
-            const SizedBox(height: 8),
-            SelectableText(
-              _walletAddress,
-              style: GoogleFonts.sourceCodePro(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold),
+            const Text("Start Secure Chat", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 20),
+            CupertinoTextField(
+              controller: _targetController,
+              placeholder: "Recipient Nickname",
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.white10,
+                borderRadius: BorderRadius.circular(15),
+              ),
             ),
-            const SizedBox(height: 4),
-            Text("Status: Connected (Burner Mode)", style: GoogleFonts.outfit(color: Colors.greenAccent, fontSize: 12)),
+            const SizedBox(height: 20),
+            CupertinoButton.filled(
+              onPressed: () {
+                Navigator.pop(ctx);
+                _openChat(_targetController.text);
+              },
+              child: const Text("Open Channel"),
+            )
           ],
         ),
       ),
     );
   }
 
-  Widget _buildChatList() {
-    return ListView.builder(
-      reverse: true,
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      itemCount: _messages.length,
-      itemBuilder: (ctx, i) {
-        return Container(
-          margin: const EdgeInsets.only(bottom: 12),
-          child: GlassmorphicContainer(
-            width: double.infinity,
-            height: 60,
-            borderRadius: 12,
-            blur: 10,
-            alignment: Alignment.centerLeft,
-            border: 1,
-            linearGradient: LinearGradient(colors: [Colors.white.withOpacity(0.05), Colors.white.withOpacity(0.01)]),
-            borderGradient: LinearGradient(colors: [Colors.white.withOpacity(0.2), Colors.transparent]),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Text(_messages[i], style: const TextStyle(color: Colors.white)),
+  void _openChat(String nickname) {
+    Navigator.push(context, MaterialPageRoute(builder: (_) => ChatDetailScreen(nickname: nickname)));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final chat = context.watch<ChatService>();
+    
+    return Scaffold(
+      appBar: AppBar(
+        title: Text("HashChat // ${chat.username}", style: GoogleFonts.outfit(fontSize: 18)),
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        actions: [
+          IconButton(onPressed: _showNewChat, icon: const Icon(CupertinoIcons.add_circled)),
+        ],
+      ),
+      extendBodyBehindAppBar: true,
+      body: Stack(
+        children: [
+          _buildBackground(),
+          SafeArea(
+            child: ListView.builder(
+              padding: const EdgeInsets.all(16),
+              itemCount: chat.messages.length,
+              itemBuilder: (ctx, i) {
+                final msg = chat.messages[i];
+                return _buildChatTile(msg);
+              },
             ),
           ),
-        );
-      },
+        ],
+      ),
     );
   }
 
-  Widget _buildInputArea() {
-    return Padding(
-      padding: const EdgeInsets.all(16.0),
-      child: Row(
-        children: [
-          Expanded(
-            child: CupertinoTextField(
-              controller: _msgController,
-              placeholder: "Type a secret...",
-              placeholderStyle: TextStyle(color: Colors.white.withOpacity(0.4)),
-              style: const TextStyle(color: Colors.white),
-              decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(20),
-              ),
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            ),
+  Widget _buildChatTile(ChatMessage msg) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      child: GlassmorphicContainer(
+        width: double.infinity,
+        height: 70,
+        borderRadius: 15,
+        blur: 10,
+        alignment: Alignment.centerLeft,
+        border: 1,
+        linearGradient: LinearGradient(colors: [Colors.white.withOpacity(0.1), Colors.white.withOpacity(0.05)]),
+        borderGradient: LinearGradient(colors: [Colors.white24, Colors.transparent]),
+        child: ListTile(
+          leading: CircleAvatar(
+            backgroundColor: Colors.cyanAccent.withOpacity(0.2),
+            child: const Icon(CupertinoIcons.person, color: Colors.cyanAccent),
           ),
-          const SizedBox(width: 10),
-          CupertinoButton(
-            padding: EdgeInsets.zero,
-            color: Colors.cyanAccent.withOpacity(0.2),
-            onPressed: _sendMessage,
-            borderRadius: BorderRadius.circular(20),
-            child: const Icon(CupertinoIcons.arrow_up_circle_fill, color: Colors.cyanAccent),
-          )
+          title: Text(msg.receiver.substring(0, 8), style: const TextStyle(fontWeight: FontWeight.bold)),
+          subtitle: Text(msg.content, maxLines: 1, overflow: TextOverflow.ellipsis),
+          trailing: Text(DateFormat('HH:mm').format(msg.timestamp), style: const TextStyle(fontSize: 10, color: Colors.white54)),
+          onTap: () => _openChat("User"), // Logic to get nickname
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBackground() {
+    return Container(
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          colors: [Color(0xFF0F2027), Color(0xFF203A43), Color(0xFF2C5364)],
+        )
+      ),
+    );
+  }
+}
+
+class ChatDetailScreen extends StatefulWidget {
+  final String nickname;
+  const ChatDetailScreen({super.key, required this.nickname});
+
+  @override
+  State<ChatDetailScreen> createState() => _ChatDetailScreenState();
+}
+
+class _ChatDetailScreenState extends State<ChatDetailScreen> {
+  final TextEditingController _msgController = TextEditingController();
+
+  @override
+  Widget build(BuildContext context) {
+    final chat = context.watch<ChatService>();
+    final messages = chat.messages.where((m) => true).toList(); // Simplified filter
+
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(widget.nickname),
+        backgroundColor: Colors.black54,
+      ),
+      body: Stack(
+        children: [
+          Container(color: const Color(0xFF0F2027)),
+          Column(
+            children: [
+              Expanded(
+                child: ListView.builder(
+                  reverse: true,
+                  padding: const EdgeInsets.all(16),
+                  itemCount: messages.length,
+                  itemBuilder: (ctx, i) {
+                    final msg = messages[i];
+                    return _buildBubble(msg);
+                  },
+                ),
+              ),
+              _buildInput(chat),
+            ],
+          ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildBubble(ChatMessage msg) {
+    return Align(
+      alignment: msg.isMe ? Alignment.centerRight : Alignment.centerLeft,
+      child: Container(
+        margin: const EdgeInsets.symmetric(vertical: 4),
+        padding: const EdgeInsets.all(12),
+        constraints: const BoxConstraints(maxWidth: 250),
+        decoration: BoxDecoration(
+          color: msg.isMe ? Colors.cyanAccent.withOpacity(0.2) : Colors.white10,
+          borderRadius: BorderRadius.circular(15).copyWith(
+            bottomRight: msg.isMe ? Radius.zero : const Radius.circular(15),
+            bottomLeft: msg.isMe ? const Radius.circular(15) : Radius.zero,
+          ),
+        ),
+        child: Text(msg.content),
+      ),
+    );
+  }
+
+  Widget _buildInput(ChatService chat) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      color: Colors.black26,
+      child: SafeArea(
+        child: Row(
+          children: [
+            Expanded(
+              child: CupertinoTextField(
+                controller: _msgController,
+                placeholder: "Secure Message...",
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.white10,
+                  borderRadius: BorderRadius.circular(20),
+                ),
+              ),
+            ),
+            const SizedBox(width: 10),
+            CupertinoButton(
+              padding: EdgeInsets.zero,
+              onPressed: () async {
+                if (_msgController.text.isEmpty) return;
+                final text = _msgController.text;
+                _msgController.clear();
+                await chat.sendMessage(widget.nickname, text);
+              },
+              child: const Icon(CupertinoIcons.arrow_up_circle_fill, size: 40, color: Colors.cyanAccent),
+            )
+          ],
+        ),
       ),
     );
   }
