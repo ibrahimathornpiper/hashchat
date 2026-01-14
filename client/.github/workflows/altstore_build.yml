@@ -15,11 +15,23 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
-      - name: Build IPA (Force No Signing)
-        # ВОТ ЗДЕСЬ МЫ ВНЕДРИЛИ ИСПРАВЛЕНИЕ:
-        run: flutter build ios --release --no-codesign -- --xcargs CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY=""
+      - name: Nuke Signing Requirements (Dirty Hack)
+        run: |
+          cd ios/Runner.xcodeproj
+          # 1. Принудительно ставим Manual (чтобы Xcode не искал профили сам)
+          sed -i '' 's/ProvisioningStyle = Automatic;/ProvisioningStyle = Manual;/g' project.pbxproj
+          # 2. Удаляем строку DevelopmentTeam (делаем ее пустой)
+          sed -i '' 's/DevelopmentTeam = [^;]*;/DevelopmentTeam = "";/g' project.pbxproj
+          # 3. Убираем требование подписи
+          sed -i '' 's/CODE_SIGNING_REQUIRED = "YES";/CODE_SIGNING_REQUIRED = "NO";/g' project.pbxproj
+          sed -i '' 's/CODE_SIGNING_ALLOWED = "YES";/CODE_SIGNING_ALLOWED = "NO";/g' project.pbxproj
+          # 4. Стираем идентификатор подписи
+          sed -i '' 's/CODE_SIGN_IDENTITY = "iPhone Developer";/CODE_SIGN_IDENTITY = "";/g' project.pbxproj
 
-      - name: Package for AltStore
+      - name: Build IPA (No Codesign)
+        run: flutter build ios --release --no-codesign
+
+      - name: Package Payload
         run: |
           mkdir Payload
           mv build/ios/iphoneos/Runner.app Payload/
