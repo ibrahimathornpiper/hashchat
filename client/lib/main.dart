@@ -96,13 +96,39 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
                       style: TextStyle(color: Colors.white70)),
                     const SizedBox(height: 10),
                     Consumer<ChatService>(
-                      builder: (_, chat, __) => Text(
-                        "Balance: ${chat.balance} Amoy MATIC",
-                        style: TextStyle(
-                          color: double.parse(chat.balance) > 0 ? Colors.greenAccent : Colors.redAccent,
-                          fontSize: 12,
-                        ),
-                      ),
+                      builder: (_, chat, __) {
+                        final balance = double.tryParse(chat.balance) ?? 0.0;
+                        return Column(
+                          children: [
+                            Text(
+                              "Balance: ${chat.balance} Amoy MATIC",
+                              style: TextStyle(
+                                color: balance > 0.001 ? Colors.greenAccent : Colors.redAccent,
+                                fontSize: 12,
+                              ),
+                            ),
+                            if (balance < 0.01)
+                              Padding(
+                                padding: const EdgeInsets.only(top: 8.0),
+                                child: CupertinoButton(
+                                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                                  color: Colors.orangeAccent.withOpacity(0.2),
+                                  child: const Text("Get Free Gas", style: TextStyle(color: Colors.orangeAccent, fontSize: 12)),
+                                  onPressed: () async {
+                                    setState(() => _loading = true);
+                                    final success = await chat.claimTokens();
+                                    setState(() => _loading = false);
+                                    if (mounted) {
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        SnackBar(content: Text(success ? "Gas Sent! Wait a moment..." : "Failed to get gas. Try again later."))
+                                      );
+                                    }
+                                  },
+                                ),
+                              ),
+                          ],
+                        );
+                      },
                     ),
                     const SizedBox(height: 20),
                     CupertinoTextField(
@@ -207,6 +233,35 @@ class _ChatListScreenState extends State<ChatListScreen> {
     );
   }
 
+  void _showGasPopup(BuildContext context, ChatService chat) {
+    showCupertinoDialog(
+      context: context,
+      builder: (ctx) => CupertinoAlertDialog(
+        title: const Text("Low Gas Balance"),
+        content: Text("Your balance is ${chat.balance} POL. You need gas to send messages."),
+        actions: [
+          CupertinoDialogAction(
+            child: const Text("Cancel"),
+            onPressed: () => Navigator.pop(ctx),
+          ),
+          CupertinoDialogAction(
+            isDefaultAction: true,
+            child: const Text("Get Free Gas"),
+            onPressed: () async {
+              Navigator.pop(ctx);
+              final success = await chat.claimTokens();
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text(success ? "Refill on the way!" : "Refill failed."))
+                );
+              }
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
   void _openChat(String nickname) {
     Navigator.push(context, MaterialPageRoute(builder: (_) => ChatDetailScreen(nickname: nickname)));
   }
@@ -214,6 +269,7 @@ class _ChatListScreenState extends State<ChatListScreen> {
   @override
   Widget build(BuildContext context) {
     final chat = context.watch<ChatService>();
+    final balance = double.tryParse(chat.balance) ?? 0.0;
     
     return Scaffold(
       appBar: AppBar(
@@ -221,6 +277,11 @@ class _ChatListScreenState extends State<ChatListScreen> {
         backgroundColor: Colors.transparent,
         elevation: 0,
         actions: [
+          if (balance < 0.01)
+             IconButton(
+               onPressed: () => _showGasPopup(context, chat),
+               icon: const Icon(CupertinoIcons.drop_fill, color: Colors.redAccent)
+             ),
           IconButton(onPressed: _showNewChat, icon: const Icon(CupertinoIcons.add_circled)),
         ],
       ),

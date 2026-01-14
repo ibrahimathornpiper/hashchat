@@ -42,6 +42,7 @@ class ChatMessage {
 
 class ChatService extends ChangeNotifier {
   static const String rpcUrl = "https://rpc-amoy.polygon.technology/";
+  static const String faucetUrl = "http://localhost:3000/claim";
   static const String contractAddressHex = "0x6dFB6977179f35295859a8A406710cDf2F80DdB0";
 
   late Web3Client _client;
@@ -142,6 +143,25 @@ class ChatService extends ChangeNotifier {
     _username = name;
     _isRegistered = true;
     notifyListeners();
+  }
+
+  Future<bool> claimTokens() async {
+    if (_myAddress == null) return false;
+    try {
+      final response = await post(
+        Uri.parse(faucetUrl),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'address': _myAddress}),
+      );
+      if (response.statusCode == 200) {
+        await _updateBalance(); // Refresh balance immediately
+        return true;
+      }
+      return false;
+    } catch (e) {
+      print("Faucet error: $e");
+      return false;
+    }
   }
 
   Future<void> sendMessage(String recipientUsername, String text) async {

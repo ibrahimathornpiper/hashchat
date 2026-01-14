@@ -44,20 +44,32 @@ app.post('/claim', async (req, res) => {
         return res.status(400).send('Invalid address');
     }
 
-    if (rateLimit.has(userAddress)) {
-        return res.status(429).send('Already claimed');
-    }
-
+    // Check if user has enough balance (prevent draining)
     try {
+        const currentBalance = await provider.getBalance(userAddress);
+        const threshold = ethers.parseEther("0.05"); 
+        
+        if (currentBalance > threshold) {
+            return res.status(400).json({ error: 'Balance is sufficient. No top-up needed.' });
+        }
+
+        // Simple cooldown check
+        const lastClaim = rateLimit.get(userAddress) || 0;
+        const now = Date.now();
+        if (now - lastClaim < 60000) { // 1 minute cooldown
+            return res.status(429).json({ error: 'Please wait a moment before claiming again.' });
+        }
+
         const tx = await wallet.sendTransaction({
             to: userAddress,
-            value: ethers.parseEther("0.05")
+            value: ethers.parseEther("0.1")
         });
-        rateLimit.set(userAddress, true);
+        
+        rateLimit.set(userAddress, now);
         res.json({ success: true, txHash: tx.hash });
     } catch (e) {
         console.error(e);
-        res.status(500).json({ error: 'Transaction failed' });
+        res.status(500).json({ error: 'Transaction failed', details: e.message });
     }
 });
 
