@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:glassmorphism/glassmorphism.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -126,6 +127,19 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
                                   },
                                 ),
                               ),
+                            const SizedBox(height: 12),
+                            GestureDetector(
+                              onTap: () {
+                                Clipboard.setData(ClipboardData(text: chat.myAddress ?? ""));
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(content: Text("Address copied to clipboard"))
+                                );
+                              },
+                              child: Text(
+                                "Address: ${chat.myAddress?.substring(0, 6)}...${chat.myAddress?.substring(chat.myAddress!.length - 4)}",
+                                style: const TextStyle(color: Colors.white54, fontSize: 10, decoration: TextDecoration.underline),
+                              ),
+                            ),
                           ],
                         );
                       },
@@ -237,12 +251,31 @@ class _ChatListScreenState extends State<ChatListScreen> {
     showCupertinoDialog(
       context: context,
       builder: (ctx) => CupertinoAlertDialog(
-        title: const Text("Low Gas Balance"),
-        content: Text("Your balance is ${chat.balance} POL. You need gas to send messages."),
+        title: const Text("Wallet Status"),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 10),
+            Text("Balance: ${chat.balance} POL"),
+            const SizedBox(height: 10),
+            const Text("Your Public Address:", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+            SelectableText(
+              chat.myAddress ?? "",
+              style: const TextStyle(fontSize: 10, color: Colors.cyanAccent),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
         actions: [
           CupertinoDialogAction(
-            child: const Text("Cancel"),
-            onPressed: () => Navigator.pop(ctx),
+            child: const Text("Copy Address"),
+            onPressed: () {
+              Clipboard.setData(ClipboardData(text: chat.myAddress ?? ""));
+              Navigator.pop(ctx);
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text("Address copied!"))
+              );
+            },
           ),
           CupertinoDialogAction(
             isDefaultAction: true,
@@ -256,6 +289,10 @@ class _ChatListScreenState extends State<ChatListScreen> {
                 );
               }
             },
+          ),
+          CupertinoDialogAction(
+            child: const Text("Close"),
+            onPressed: () => Navigator.pop(ctx),
           ),
         ],
       ),
