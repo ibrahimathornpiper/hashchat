@@ -40,7 +40,7 @@ dependencies:
     sdk: flutter
   cupertino_icons: ^1.0.6
   # UI
-  glassmorphic: ^3.0.0
+  glassmorphism: ^3.0.0
   google_fonts: ^6.1.0
   # Crypto
   web3dart: ^2.7.0
@@ -65,7 +65,7 @@ import 'dart:ui';
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
-import 'package:glassmorphic/glassmorphic.dart';
+import 'package:glassmorphism/glassmorphism.dart';
 import 'package:web3dart/web3dart.dart'; // For Wallet
 import 'package:encrypt/encrypt.dart' as encrypt; // For AES
 import 'package:google_fonts/google_fonts.dart';

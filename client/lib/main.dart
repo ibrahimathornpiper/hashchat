@@ -2,7 +2,7 @@ import 'dart:ui';
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
-import 'package:glassmorphic/glassmorphic.dart';
+import 'package:glassmorphism/glassmorphism.dart';
 import 'package:web3dart/web3dart.dart'; // For Wallet
 import 'package:encrypt/encrypt.dart' as encrypt; // For AES
 import 'package:google_fonts/google_fonts.dart';
