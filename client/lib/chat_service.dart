@@ -51,6 +51,7 @@ class ChatService extends ChangeNotifier {
   String? _myAddress;
   String? _username;
   bool _isRegistered = false;
+  EtherAmount _balance = EtherAmount.zero();
 
   List<ChatMessage> _messages = [];
   Map<String, String> _addressToUsername = {};
@@ -64,6 +65,7 @@ class ChatService extends ChangeNotifier {
   String? get myAddress => _myAddress;
   String? get username => _username;
   bool get isRegistered => _isRegistered;
+  String get balance => _balance.getValueInUnit(EtherUnit.ether).toStringAsFixed(4);
   List<ChatMessage> get messages => _messages;
 
   Future<void> _init() async {
@@ -79,11 +81,21 @@ class ChatService extends ChangeNotifier {
 
     _myAddress = _credentials.address.hex;
     await _loadContract();
+    await _updateBalance();
     await _checkRegistration();
     await _loadMessages();
     
     // Start polling
-    Timer.periodic(const Duration(seconds: 5), (timer) => syncMessages());
+    Timer.periodic(const Duration(seconds: 5), (timer) {
+      _updateBalance();
+      syncMessages();
+    });
+    notifyListeners();
+  }
+
+  Future<void> _updateBalance() async {
+    if (_myAddress == null) return;
+    _balance = await _client.getBalance(_credentials.address);
     notifyListeners();
   }
 
@@ -114,12 +126,15 @@ class ChatService extends ChangeNotifier {
     final pubKey = CryptoUtils.getPublicKeyFromPrivateKey(_credentials);
     final func = _contract.function('registerUsername');
     
+    final gasPrice = await _client.getGasPrice();
+
     await _client.sendTransaction(
       _credentials,
       Transaction.callContract(
         contract: _contract,
         function: func,
         parameters: [name, pubKey],
+        gasPrice: gasPrice,
       ),
       chainId: 80002, // Amoy
     );
@@ -149,12 +164,15 @@ class ChatService extends ChangeNotifier {
 
     // 3. Send
     final sendFunc = _contract.function('sendMessage');
+    final gasPrice = await _client.getGasPrice();
+
     await _client.sendTransaction(
       _credentials,
       Transaction.callContract(
         contract: _contract,
         function: sendFunc,
         parameters: [recipientAddr, encrypted],
+        gasPrice: gasPrice,
       ),
       chainId: 80002,
     );

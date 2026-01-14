@@ -94,7 +94,17 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
                     const Text("Secure, Decentralized, Unstoppable.", 
                       textAlign: TextAlign.center,
                       style: TextStyle(color: Colors.white70)),
-                    const SizedBox(height: 40),
+                    const SizedBox(height: 10),
+                    Consumer<ChatService>(
+                      builder: (_, chat, __) => Text(
+                        "Balance: ${chat.balance} Amoy MATIC",
+                        style: TextStyle(
+                          color: double.parse(chat.balance) > 0 ? Colors.greenAccent : Colors.redAccent,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 20),
                     CupertinoTextField(
                       controller: _nameController,
                       placeholder: "Enter Nickname",
