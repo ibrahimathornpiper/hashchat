@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import 'package:glassmorphism/glassmorphism.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
+import 'package:local_auth/local_auth.dart';
 import 'chat_service.dart';
 
 void main() {
@@ -27,12 +28,123 @@ class HashChatApp extends StatelessWidget {
       theme: ThemeData(
         brightness: Brightness.dark,
         scaffoldBackgroundColor: Colors.black,
-        textTheme: GoogleFonts.outfitTextTheme(ThemeData.dark().textTheme),
+        primaryColor: const Color(0xFF00FF41),
+        colorScheme: const ColorScheme.dark(
+          primary: Color(0xFF00FF41),
+          secondary: Color(0xFF008F11),
+          surface: Colors.black,
+          background: Colors.black,
+        ),
+        textTheme: GoogleFonts.firaCodeTextTheme(ThemeData.dark().textTheme).apply(
+          bodyColor: const Color(0xFF00FF41),
+          displayColor: const Color(0xFF00FF41),
+        ),
+        iconTheme: const IconThemeData(color: Color(0xFF00FF41)),
       ),
-      home: const RootScreen(),
+      home: const AuthScreen(),
     );
   }
 }
+
+class AuthScreen extends StatefulWidget {
+  const AuthScreen({super.key});
+
+  @override
+  State<AuthScreen> createState() => _AuthScreenState();
+}
+
+class _AuthScreenState extends State<AuthScreen> {
+  final LocalAuthentication auth = LocalAuthentication();
+  bool _isAuthenticating = false;
+  String _authStatus = "Identity Verification Required";
+
+  @override
+  void initState() {
+    super.initState();
+    _authenticate();
+  }
+
+  Future<void> _authenticate() async {
+    bool authenticated = false;
+    try {
+      setState(() {
+        _isAuthenticating = true;
+        _authStatus = "Scanning Biometrics...";
+      });
+      
+      final bool canAuthenticateWithBiometrics = await auth.canCheckBiometrics;
+      final bool canAuthenticate = canAuthenticateWithBiometrics || await auth.isDeviceSupported();
+
+      if (!canAuthenticate) {
+        // Fallback for emulators or devices without biometrics
+        setState(() => _authStatus = "Biometrics Unavailable. Bypassing (Dev Mode)...");
+        await Future.delayed(const Duration(seconds: 1));
+        authenticated = true;
+      } else {
+        authenticated = await auth.authenticate(
+          localizedReason: 'Scan FaceID/TouchID to access Secure Terminal',
+          options: const AuthenticationOptions(
+            stickyAuth: true,
+            biometricOnly: false, // Allow PIN
+          ),
+        );
+      }
+    } on PlatformException catch (e) {
+      setState(() => _authStatus = "Error: ${e.message}");
+      return;
+    } finally {
+      setState(() => _isAuthenticating = false);
+    }
+
+    if (authenticated) {
+      if (mounted) {
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(builder: (context) => const RootScreen()),
+        );
+      }
+    } else {
+      setState(() => _authStatus = "Access Denied.");
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.black,
+      body: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.lock_outline, size: 80, color: Color(0xFF00FF41)),
+            const SizedBox(height: 20),
+            Text(
+              "HASHCHAT // SECURE TERMINAL",
+              style: GoogleFonts.firaCode(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                color: const Color(0xFF00FF41),
+              ),
+            ),
+            const SizedBox(height: 40),
+            if (_isAuthenticating)
+              const CircularProgressIndicator(color: Color(0xFF00FF41)),
+            const SizedBox(height: 20),
+            Text(
+              _authStatus,
+              style: GoogleFonts.firaCode(color: Colors.white54),
+            ),
+            if (!_isAuthenticating && _authStatus == "Access Denied.")
+              TextButton(
+                onPressed: _authenticate,
+                child: Text("Retry", style: GoogleFonts.firaCode(color: const Color(0xFF00FF41))),
+              )
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 
 class RootScreen extends StatelessWidget {
   const RootScreen({super.key});
@@ -67,119 +179,131 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: Colors.black,
       body: Stack(
         children: [
           _buildBackground(),
           Center(
-            child: GlassmorphicContainer(
+            child: Container(
               width: 350,
-              height: 400,
-              borderRadius: 30,
-              blur: 20,
-              alignment: Alignment.center,
-              border: 2,
-              linearGradient: LinearGradient(
-                colors: [Colors.white.withOpacity(0.1), Colors.white.withOpacity(0.05)]
+              padding: const EdgeInsets.all(32),
+              decoration: BoxDecoration(
+                color: Colors.black,
+                border: Border.all(color: const Color(0xFF00FF41), width: 2),
+                boxShadow: [
+                  BoxShadow(color: const Color(0xFF00FF41).withOpacity(0.2), blurRadius: 20, spreadRadius: 2)
+                ],
               ),
-              borderGradient: LinearGradient(
-                colors: [Colors.cyanAccent.withOpacity(0.5), Colors.purpleAccent.withOpacity(0.5)]
-              ),
-              child: Padding(
-                padding: const EdgeInsets.all(32.0),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text("Welcome to HashChat", 
-                      style: GoogleFonts.outfit(fontSize: 24, fontWeight: FontWeight.bold)),
-                    const SizedBox(height: 10),
-                    const Text("Secure, Decentralized, Unstoppable.", 
-                      textAlign: TextAlign.center,
-                      style: TextStyle(color: Colors.white70)),
-                    const SizedBox(height: 10),
-                    Consumer<ChatService>(
-                      builder: (_, chat, __) {
-                        final balance = double.tryParse(chat.balance) ?? 0.0;
-                        return Column(
-                          children: [
-                            Text(
-                              "Balance: ${chat.balance} Amoy MATIC",
-                              style: TextStyle(
-                                color: balance > 0.001 ? Colors.greenAccent : Colors.redAccent,
-                                fontSize: 12,
-                              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(">> HASHCHAT_INIT", 
+                    style: GoogleFonts.firaCode(fontSize: 24, fontWeight: FontWeight.bold, color: const Color(0xFF00FF41))),
+                  const SizedBox(height: 10),
+                  Text("[SECURE] [DECENTRALIZED] [UNSTOPPABLE]", 
+                    textAlign: TextAlign.center,
+                    style: GoogleFonts.firaCode(color: const Color(0xFF008F11), fontSize: 10)),
+                  const SizedBox(height: 20),
+                  Consumer<ChatService>(
+                    builder: (_, chat, __) {
+                      final balance = double.tryParse(chat.balance) ?? 0.0;
+                      return Column(
+                        children: [
+                          Text(
+                            "BALANCE: ${chat.balance} MATIC",
+                            style: GoogleFonts.firaCode(
+                              color: balance > 0.001 ? const Color(0xFF00FF41) : Colors.redAccent,
+                              fontSize: 12,
                             ),
-                            if (balance < 0.01)
-                              Padding(
-                                padding: const EdgeInsets.only(top: 8.0),
-                                child: CupertinoButton(
-                                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                                  color: Colors.orangeAccent.withOpacity(0.2),
-                                  child: const Text("Get Free Gas", style: TextStyle(color: Colors.orangeAccent, fontSize: 12)),
-                                  onPressed: () async {
-                                    setState(() => _loading = true);
-                                    final success = await chat.claimTokens();
-                                    setState(() => _loading = false);
-                                    if (mounted) {
-                                      ScaffoldMessenger.of(context).showSnackBar(
-                                        SnackBar(content: Text(success ? "Gas Sent! Wait a moment..." : "Failed to get gas. Try again later."))
-                                      );
-                                    }
-                                  },
+                          ),
+                          if (balance < 0.01)
+                            Padding(
+                              padding: const EdgeInsets.only(top: 8.0),
+                              child: OutlinedButton(
+                                style: OutlinedButton.styleFrom(
+                                  foregroundColor: Colors.orangeAccent,
+                                  side: const BorderSide(color: Colors.orangeAccent),
                                 ),
-                              ),
-                            const SizedBox(height: 12),
-                            GestureDetector(
-                              onTap: () {
-                                Clipboard.setData(ClipboardData(text: chat.myAddress ?? ""));
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(content: Text("Address copied to clipboard"))
-                                );
-                              },
-                              child: Text(
-                                "Address: ${chat.myAddress?.substring(0, 6)}...${chat.myAddress?.substring(chat.myAddress!.length - 4)}",
-                                style: const TextStyle(color: Colors.white54, fontSize: 10, decoration: TextDecoration.underline),
+                                child: Text("REQ_GAS()", style: GoogleFonts.firaCode(fontSize: 12)),
+                                onPressed: () async {
+                                  setState(() => _loading = true);
+                                  final success = await chat.claimTokens();
+                                  setState(() => _loading = false);
+                                  if (mounted) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(
+                                        backgroundColor: Colors.black,
+                                        content: Text(
+                                          success ? "> GAS_SENT: WAIT" : "> ERROR: GAS_FAILED",
+                                          style: GoogleFonts.firaCode(color: const Color(0xFF00FF41)),
+                                        )
+                                      )
+                                    );
+                                  }
+                                },
                               ),
                             ),
-                          ],
-                        );
-                      },
-                    ),
-                    const SizedBox(height: 20),
-                    CupertinoTextField(
-                      controller: _nameController,
-                      placeholder: "Enter Nickname",
-                      placeholderStyle: const TextStyle(color: Colors.white38),
-                      style: const TextStyle(color: Colors.white),
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(15),
-                      ),
-                    ),
-                    const SizedBox(height: 20),
-                    if (_loading) 
-                      const CircularProgressIndicator()
-                    else
-                      SizedBox(
-                        width: double.infinity,
-                        child: CupertinoButton(
-                          color: Colors.cyanAccent.withOpacity(0.2),
-                          onPressed: () async {
-                            setState(() => _loading = true);
-                            try {
-                              await context.read<ChatService>().register(_nameController.text);
-                            } catch (e) {
+                          const SizedBox(height: 12),
+                          GestureDetector(
+                            onTap: () {
+                              Clipboard.setData(ClipboardData(text: chat.myAddress ?? ""));
                               ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(content: Text("Error: $e"))
+                                SnackBar(
+                                  backgroundColor: Colors.black,
+                                  content: Text("> ADDR_COPIED", style: GoogleFonts.firaCode(color: const Color(0xFF00FF41)))
+                                )
                               );
-                            }
-                            setState(() => _loading = false);
-                          },
-                          child: const Text("Register Identity", style: TextStyle(color: Colors.cyanAccent)),
+                            },
+                            child: Text(
+                              "ADDR: ${chat.myAddress?.substring(0, 6)}...${chat.myAddress?.substring(chat.myAddress!.length - 4)}",
+                              style: GoogleFonts.firaCode(color: Colors.white54, fontSize: 10, decoration: TextDecoration.underline),
+                            ),
+                          ),
+                        ],
+                      );
+                    },
+                  ),
+                  const SizedBox(height: 20),
+                  TextField(
+                    controller: _nameController,
+                    style: GoogleFonts.firaCode(color: const Color(0xFF00FF41)),
+                    cursorColor: const Color(0xFF00FF41),
+                    decoration: InputDecoration(
+                      hintText: "ENTER_CODENAME",
+                      hintStyle: GoogleFonts.firaCode(color: const Color(0xFF008F11)),
+                      enabledBorder: const OutlineInputBorder(borderSide: BorderSide(color: Color(0xFF008F11))),
+                      focusedBorder: const OutlineInputBorder(borderSide: BorderSide(color: Color(0xFF00FF41))),
+                      filled: true,
+                      fillColor: const Color(0xFF0D0208),
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  if (_loading) 
+                    const CircularProgressIndicator(color: Color(0xFF00FF41))
+                  else
+                    SizedBox(
+                      width: double.infinity,
+                      child: OutlinedButton(
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: const Color(0xFF00FF41),
+                          side: const BorderSide(color: Color(0xFF00FF41)),
+                          padding: const EdgeInsets.all(16),
                         ),
+                        onPressed: () async {
+                          setState(() => _loading = true);
+                          try {
+                            await context.read<ChatService>().register(_nameController.text);
+                          } catch (e) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(content: Text("Error: $e"))
+                            );
+                          }
+                          setState(() => _loading = false);
+                        },
+                        child: Text("REGISTER_IDENTITY()", style: GoogleFonts.firaCode(fontWeight: FontWeight.bold)),
                       ),
-                  ],
-                ),
+                    ),
+                ],
               ),
             ),
           ),
@@ -190,10 +314,16 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
 
   Widget _buildBackground() {
     return Container(
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          colors: [Color(0xFF0F2027), Color(0xFF203A43), Color(0xFF2C5364)],
-        )
+      color: Colors.black,
+      child: Center(
+        child: Opacity(
+          opacity: 0.05,
+          child: Text(
+            "101010101010101010101010\n010101010101010101010101\n101010101010101010101010",
+            style: GoogleFonts.firaCode(fontSize: 40, color: Colors.green),
+            textAlign: TextAlign.center,
+          ),
+        ),
       ),
     );
   }
@@ -208,38 +338,50 @@ class ChatListScreen extends StatefulWidget {
 
 class _ChatListScreenState extends State<ChatListScreen> {
   final TextEditingController _targetController = TextEditingController();
-  final TextEditingController _msgController = TextEditingController();
 
   void _showNewChat() {
-    showCupertinoModalPopup(
+    showModalBottomSheet(
       context: context,
+      backgroundColor: Colors.black,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(0)),
+        side: BorderSide(color: Color(0xFF00FF41)),
+      ),
       builder: (ctx) => Container(
         height: 300,
         padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          color: const Color(0xFF1B2735),
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(25)),
-        ),
         child: Column(
           children: [
-            const Text("Start Secure Chat", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            Text("INIT_SECURE_CHANNEL()", style: GoogleFonts.firaCode(fontSize: 18, fontWeight: FontWeight.bold, color: const Color(0xFF00FF41))),
             const SizedBox(height: 20),
-            CupertinoTextField(
+            TextField(
               controller: _targetController,
-              placeholder: "Recipient Nickname",
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Colors.white10,
-                borderRadius: BorderRadius.circular(15),
+              style: GoogleFonts.firaCode(color: const Color(0xFF00FF41)),
+              cursorColor: const Color(0xFF00FF41),
+              decoration: InputDecoration(
+                hintText: "TARGET_CODENAME",
+                hintStyle: GoogleFonts.firaCode(color: const Color(0xFF008F11)),
+                enabledBorder: const OutlineInputBorder(borderSide: BorderSide(color: Color(0xFF008F11))),
+                focusedBorder: const OutlineInputBorder(borderSide: BorderSide(color: Color(0xFF00FF41))),
+                filled: true,
+                fillColor: const Color(0xFF0D0208),
               ),
             ),
             const SizedBox(height: 20),
-            CupertinoButton.filled(
-              onPressed: () {
-                Navigator.pop(ctx);
-                _openChat(_targetController.text);
-              },
-              child: const Text("Open Channel"),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton(
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: const Color(0xFF00FF41),
+                  side: const BorderSide(color: Color(0xFF00FF41)),
+                  padding: const EdgeInsets.all(16),
+                ),
+                onPressed: () {
+                  Navigator.pop(ctx);
+                  _openChat(_targetController.text);
+                },
+                child: Text("OPEN_CHANNEL", style: GoogleFonts.firaCode(fontWeight: FontWeight.bold)),
+              ),
             )
           ],
         ),
@@ -248,27 +390,28 @@ class _ChatListScreenState extends State<ChatListScreen> {
   }
 
   void _showGasPopup(BuildContext context, ChatService chat) {
-    showCupertinoDialog(
+    showDialog(
       context: context,
-      builder: (ctx) => CupertinoAlertDialog(
-        title: const Text("Wallet Status"),
+      builder: (ctx) => AlertDialog(
+        backgroundColor: Colors.black,
+        shape:  Border.all(color: const Color(0xFF00FF41)),
+        title: Text("WALLET_STATUS", style: GoogleFonts.firaCode(color: const Color(0xFF00FF41))),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
+            Text("BALANCE: ${chat.balance} POL", style: GoogleFonts.firaCode(color: Colors.white)),
             const SizedBox(height: 10),
-            Text("Balance: ${chat.balance} POL"),
-            const SizedBox(height: 10),
-            const Text("Your Public Address:", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+            Text("PUBLIC_KEY:", style: GoogleFonts.firaCode(fontSize: 12, fontWeight: FontWeight.bold, color: const Color(0xFF008F11))),
             SelectableText(
               chat.myAddress ?? "",
-              style: const TextStyle(fontSize: 10, color: Colors.cyanAccent),
+              style: GoogleFonts.firaCode(fontSize: 10, color: const Color(0xFF00FF41)),
               textAlign: TextAlign.center,
             ),
           ],
         ),
         actions: [
-          CupertinoDialogAction(
-            child: const Text("Copy Address"),
+          TextButton(
+            child: Text("COPY_ADDR", style: GoogleFonts.firaCode(color: const Color(0xFF00FF41))),
             onPressed: () {
               Clipboard.setData(ClipboardData(text: chat.myAddress ?? ""));
               Navigator.pop(ctx);
@@ -277,9 +420,8 @@ class _ChatListScreenState extends State<ChatListScreen> {
               );
             },
           ),
-          CupertinoDialogAction(
-            isDefaultAction: true,
-            child: const Text("Get Free Gas"),
+          TextButton(
+            child: Text("REQ_GAS", style: GoogleFonts.firaCode(color: Colors.orangeAccent)),
             onPressed: () async {
               Navigator.pop(ctx);
               final success = await chat.claimTokens();
@@ -290,8 +432,8 @@ class _ChatListScreenState extends State<ChatListScreen> {
               }
             },
           ),
-          CupertinoDialogAction(
-            child: const Text("Close"),
+          TextButton(
+            child: Text("CLOSE", style: GoogleFonts.firaCode(color: Colors.white54)),
             onPressed: () => Navigator.pop(ctx),
           ),
         ],
@@ -309,32 +451,34 @@ class _ChatListScreenState extends State<ChatListScreen> {
     final balance = double.tryParse(chat.balance) ?? 0.0;
     
     return Scaffold(
+      backgroundColor: Colors.black,
       appBar: AppBar(
-        title: Text("HashChat // ${chat.username}", style: GoogleFonts.outfit(fontSize: 18)),
-        backgroundColor: Colors.transparent,
+        title: Text("HASHCHAT // ${chat.username}", style: GoogleFonts.firaCode(fontSize: 18, color: const Color(0xFF00FF41))),
+        backgroundColor: Colors.black,
         elevation: 0,
+        bottom: PreferredSize(preferredSize: const Size.fromHeight(1), child: Container(color: const Color(0xFF008F11), height: 1)),
         actions: [
           if (balance < 0.01)
              IconButton(
                onPressed: () => _showGasPopup(context, chat),
-               icon: const Icon(CupertinoIcons.drop_fill, color: Colors.redAccent)
+               icon: const Icon(Icons.local_gas_station, color: Colors.redAccent)
              ),
-          IconButton(onPressed: _showNewChat, icon: const Icon(CupertinoIcons.add_circled)),
+          IconButton(
+            onPressed: _showNewChat, 
+            icon: const Icon(Icons.add_circle_outline, color: Color(0xFF00FF41))
+          ),
         ],
       ),
-      extendBodyBehindAppBar: true,
       body: Stack(
         children: [
           _buildBackground(),
-          SafeArea(
-            child: ListView.builder(
-              padding: const EdgeInsets.all(16),
-              itemCount: chat.messages.length,
-              itemBuilder: (ctx, i) {
-                final msg = chat.messages[i];
-                return _buildChatTile(msg);
-              },
-            ),
+          ListView.builder(
+            padding: const EdgeInsets.all(16),
+            itemCount: chat.messages.length,
+            itemBuilder: (ctx, i) {
+              final msg = chat.messages[i];
+              return _buildChatTile(msg);
+            },
           ),
         ],
       ),
@@ -344,36 +488,31 @@ class _ChatListScreenState extends State<ChatListScreen> {
   Widget _buildChatTile(ChatMessage msg) {
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
-      child: GlassmorphicContainer(
-        width: double.infinity,
-        height: 70,
-        borderRadius: 15,
-        blur: 10,
-        alignment: Alignment.centerLeft,
-        border: 1,
-        linearGradient: LinearGradient(colors: [Colors.white.withOpacity(0.1), Colors.white.withOpacity(0.05)]),
-        borderGradient: LinearGradient(colors: [Colors.white24, Colors.transparent]),
-        child: ListTile(
-          leading: CircleAvatar(
-            backgroundColor: Colors.cyanAccent.withOpacity(0.2),
-            child: const Icon(CupertinoIcons.person, color: Colors.cyanAccent),
+      decoration: BoxDecoration(
+        color: Colors.black,
+        border: Border.all(color: const Color(0xFF008F11)),
+        boxShadow: [BoxShadow(color: const Color(0xFF00FF41).withOpacity(0.05), blurRadius: 5)],
+      ),
+      child: ListTile(
+        leading: Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            border: Border.all(color: const Color(0xFF00FF41)),
+            shape: BoxShape.circle,
           ),
-          title: Text(msg.receiver.substring(0, 8), style: const TextStyle(fontWeight: FontWeight.bold)),
-          subtitle: Text(msg.content, maxLines: 1, overflow: TextOverflow.ellipsis),
-          trailing: Text(DateFormat('HH:mm').format(msg.timestamp), style: const TextStyle(fontSize: 10, color: Colors.white54)),
-          onTap: () => _openChat("User"), // Logic to get nickname
+          child: const Icon(Icons.person_outline, color: Color(0xFF00FF41)),
         ),
+        title: Text(msg.receiver.substring(0, 8), style: GoogleFonts.firaCode(fontWeight: FontWeight.bold, color: const Color(0xFF00FF41))),
+        subtitle: Text(msg.content, maxLines: 1, overflow: TextOverflow.ellipsis, style: GoogleFonts.firaCode(color: Colors.white70)),
+        trailing: Text(DateFormat('HH:mm').format(msg.timestamp), style: GoogleFonts.firaCode(fontSize: 10, color: const Color(0xFF008F11))),
+        onTap: () => _openChat("User"), // Logic to get nickname
       ),
     );
   }
 
   Widget _buildBackground() {
     return Container(
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          colors: [Color(0xFF0F2027), Color(0xFF203A43), Color(0xFF2C5364)],
-        )
-      ),
+      color: Colors.black,
     );
   }
 }
@@ -395,29 +534,27 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
     final messages = chat.messages.where((m) => true).toList(); // Simplified filter
 
     return Scaffold(
+      backgroundColor: Colors.black,
       appBar: AppBar(
-        title: Text(widget.nickname),
-        backgroundColor: Colors.black54,
+        title: Text("TARGET: ${widget.nickname}", style: GoogleFonts.firaCode(color: const Color(0xFF00FF41))),
+        backgroundColor: Colors.black,
+        iconTheme: const IconThemeData(color: Color(0xFF00FF41)),
+        bottom: PreferredSize(preferredSize: const Size.fromHeight(1), child: Container(color: const Color(0xFF008F11), height: 1)),
       ),
-      body: Stack(
+      body: Column(
         children: [
-          Container(color: const Color(0xFF0F2027)),
-          Column(
-            children: [
-              Expanded(
-                child: ListView.builder(
-                  reverse: true,
-                  padding: const EdgeInsets.all(16),
-                  itemCount: messages.length,
-                  itemBuilder: (ctx, i) {
-                    final msg = messages[i];
-                    return _buildBubble(msg);
-                  },
-                ),
-              ),
-              _buildInput(chat),
-            ],
+          Expanded(
+            child: ListView.builder(
+              reverse: true,
+              padding: const EdgeInsets.all(16),
+              itemCount: messages.length,
+              itemBuilder: (ctx, i) {
+                final msg = messages[i];
+                return _buildBubble(msg);
+              },
+            ),
           ),
+          _buildInput(chat),
         ],
       ),
     );
@@ -431,13 +568,16 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
         padding: const EdgeInsets.all(12),
         constraints: const BoxConstraints(maxWidth: 250),
         decoration: BoxDecoration(
-          color: msg.isMe ? Colors.cyanAccent.withOpacity(0.2) : Colors.white10,
-          borderRadius: BorderRadius.circular(15).copyWith(
-            bottomRight: msg.isMe ? Radius.zero : const Radius.circular(15),
+          color: msg.isMe ? const Color(0xFF00FF41).withOpacity(0.1) : Colors.white10,
+          border: Border.all(color: msg.isMe ? const Color(0xFF00FF41) : Colors.white24),
+          borderRadius: BorderRadius.only(
+            topLeft: const Radius.circular(15),
+            topRight: const Radius.circular(15),
             bottomLeft: msg.isMe ? const Radius.circular(15) : Radius.zero,
+            bottomRight: msg.isMe ? Radius.zero : const Radius.circular(15),
           ),
         ),
-        child: Text(msg.content),
+        child: Text(msg.content, style: GoogleFonts.firaCode(color: Colors.white)),
       ),
     );
   }
@@ -445,31 +585,37 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
   Widget _buildInput(ChatService chat) {
     return Container(
       padding: const EdgeInsets.all(16),
-      color: Colors.black26,
+      decoration: const BoxDecoration(
+        color: Colors.black,
+        border: Border(top: BorderSide(color: Color(0xFF008F11))),
+      ),
       child: SafeArea(
         child: Row(
           children: [
             Expanded(
-              child: CupertinoTextField(
+              child: TextField(
                 controller: _msgController,
-                placeholder: "Secure Message...",
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.white10,
-                  borderRadius: BorderRadius.circular(20),
+                style: GoogleFonts.firaCode(color: const Color(0xFF00FF41)),
+                cursorColor: const Color(0xFF00FF41),
+                decoration: InputDecoration(
+                  hintText: "INSERT_PAYLOAD...",
+                  hintStyle: GoogleFonts.firaCode(color: const Color(0xFF008F11)),
+                  filled: true,
+                  fillColor: const Color(0xFF0D0208),
+                  border: const OutlineInputBorder(borderSide: BorderSide.none),
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                 ),
               ),
             ),
             const SizedBox(width: 10),
-            CupertinoButton(
-              padding: EdgeInsets.zero,
+            IconButton(
               onPressed: () async {
                 if (_msgController.text.isEmpty) return;
                 final text = _msgController.text;
                 _msgController.clear();
                 await chat.sendMessage(widget.nickname, text);
               },
-              child: const Icon(CupertinoIcons.arrow_up_circle_fill, size: 40, color: Colors.cyanAccent),
+              icon: const Icon(Icons.send, color: Color(0xFF00FF41)),
             )
           ],
         ),

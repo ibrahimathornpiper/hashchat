@@ -7,6 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:web3dart/web3dart.dart';
 import 'package:web3dart/crypto.dart';
 import 'crypto_utils.dart';
+import 'notification_service.dart';
 
 class ChatMessage {
   final String sender;
@@ -57,6 +58,8 @@ class ChatService extends ChangeNotifier {
   List<ChatMessage> _messages = [];
   Map<String, String> _addressToUsername = {};
   Map<String, String> _addressToPubKey = {};
+  int _lastBlock = 0;
+  bool _isSyncing = false;
 
   ChatService() {
     _client = Web3Client(rpcUrl, Client());
@@ -70,6 +73,7 @@ class ChatService extends ChangeNotifier {
   List<ChatMessage> get messages => _messages;
 
   Future<void> _init() async {
+    await NotificationService().init();
     final prefs = await SharedPreferences.getInstance();
     String? pKey = prefs.getString('private_key');
     
@@ -86,6 +90,8 @@ class ChatService extends ChangeNotifier {
     await _checkRegistration();
     await _loadMessages();
     
+    _lastBlock = await _client.getBlockNumber();
+
     // Start polling
     Timer.periodic(const Duration(seconds: 5), (timer) {
       _updateBalance();
@@ -211,10 +217,99 @@ class ChatService extends ChangeNotifier {
   }
 
   Future<void> syncMessages() async {
-    // Note: Proper event filtering is complex in raw Web3Dart without an indexer.
-    // For this prototype, we'd ideally use a backend that indexes events.
-    // Here we'll just check for new messages via events if possible, 
-    // but a real "Fullstack" app would use a Graph Protocol or a custom indexer.
+    if (_isSyncing || _myAddress == null) return;
+    _isSyncing = true;
+
+    try {
+      final currentBlock = await _client.getBlockNumber();
+      if (currentBlock <= _lastBlock) {
+        _isSyncing = false;
+        return;
+      }
+
+      final event = _contract.event('NewMessage');
+      final filter = FilterOptions.events(
+        contract: _contract,
+        event: event,
+        fromBlock: BlockNum.exact(_lastBlock + 1),
+        toBlock: BlockNum.exact(currentBlock),
+      );
+
+      final logs = await _client.getLogs(filter);
+      
+      bool newMessages = false;
+      for (final log in logs) {
+        try {
+          final decoded = event.decodeResults(log.topics!, log.data!);
+          
+          final senderAddr = decoded[0] as EthereumAddress;
+          final receiverAddr = decoded[1] as EthereumAddress;
+          final encryptedContent = decoded[2] as String;
+          // Timestamp from block is usually needed, but here it's in the event?
+          // Event definition: uint256 timestamp. Yes.
+          final timestamp = DateTime.fromMillisecondsSinceEpoch((decoded[3] as BigInt).toInt() * 1000);
+
+          if (receiverAddr.hex.toLowerCase() != _myAddress!.toLowerCase()) continue;
+
+          // Decrypt
+          String content = encryptedContent;
+          try {
+             String senderPubKey = _addressToPubKey[senderAddr.hex] ?? "";
+             if (senderPubKey.isEmpty) {
+               final getPubKeyFunc = _contract.function('getPublicKeyByAddress');
+               final pubKeyResponse = await _client.call(contract: _contract, function: getPubKeyFunc, params: [senderAddr]);
+               senderPubKey = pubKeyResponse[0] as String;
+               _addressToPubKey[senderAddr.hex] = senderPubKey;
+             }
+             
+             final sharedSecret = CryptoUtils.deriveSharedSecret(_credentials, senderPubKey);
+             content = CryptoUtils.decryptMessage(encryptedContent, sharedSecret);
+          } catch (e) {
+            print("Decryption error: $e");
+            content = "[Encrypted Message]";
+          }
+
+          final msg = ChatMessage(
+            sender: senderAddr.hex,
+            receiver: receiverAddr.hex,
+            content: content,
+            timestamp: timestamp,
+            isMe: false,
+          );
+
+          if (!_messages.any((m) => m.timestamp == msg.timestamp && m.content == msg.content && m.sender == msg.sender)) {
+             _messages.insert(0, msg);
+             newMessages = true;
+             
+             // Notification
+             String senderName = _addressToUsername[senderAddr.hex] ?? "Unknown";
+             if (senderName == "Unknown") {
+                 try {
+                   final getNameFunc = _contract.function('getUsernameByAddress');
+                   final nameResponse = await _client.call(contract: _contract, function: getNameFunc, params: [senderAddr]);
+                   senderName = nameResponse[0] as String;
+                   _addressToUsername[senderAddr.hex] = senderName;
+                 } catch(_) {}
+             }
+             
+             NotificationService().showNotification("New Message from $senderName", content);
+          }
+        } catch (e) {
+          print("Log processing error: $e");
+        }
+      }
+
+      if (newMessages) {
+        await _saveMessages();
+        notifyListeners();
+      }
+
+      _lastBlock = currentBlock;
+    } catch (e) {
+      print("Sync error: $e");
+    } finally {
+      _isSyncing = false;
+    }
   }
 
   Future<void> _saveMessages() async {

@@ -23,6 +23,9 @@ dependencies:
   path_provider: ^2.1.1
   pointycastle: ^3.7.3
   crypto: ^3.0.3
+  local_auth: ^2.1.6
+  flutter_local_notifications: ^16.0.0
+  permission_handler: ^11.0.1
 
 dev_dependencies:
   flutter_test:
