@@ -1,9 +1,11 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:math';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:web3dart/web3dart.dart';
+import 'package:web3dart/crypto.dart';
 import 'crypto_utils.dart';
 
 class ChatMessage {
@@ -69,7 +71,7 @@ class ChatService extends ChangeNotifier {
     String? pKey = prefs.getString('private_key');
     
     if (pKey == null) {
-      _credentials = EthPrivateKey.createRandom(null);
+      _credentials = EthPrivateKey.createRandom(Random.secure());
       await prefs.setString('private_key', bytesToHex(_credentials.privateKey));
     } else {
       _credentials = EthPrivateKey.fromHex(pKey);
@@ -117,7 +119,7 @@ class ChatService extends ChangeNotifier {
       Transaction.callContract(
         contract: _contract,
         function: func,
-        params: [name, pubKey],
+        parameters: [name, pubKey],
       ),
       chainId: 80002, // Amoy
     );
@@ -152,7 +154,7 @@ class ChatService extends ChangeNotifier {
       Transaction.callContract(
         contract: _contract,
         function: sendFunc,
-        params: [recipientAddr, encrypted],
+        parameters: [recipientAddr, encrypted],
       ),
       chainId: 80002,
     );
